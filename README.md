@@ -13,6 +13,16 @@ docker compose up --build --scale worker=3
 
 The `migrate` service runs `alembic upgrade head` before application services start. To apply a migration explicitly later, run `docker compose run --rm migrate`. Data lives in named Compose volumes. Open [the interactive API documentation](http://127.0.0.1:8000/docs) or use the examples below. `.env` is ignored by Git; change its example password for a shared machine.
 
+If Compose reports `service migrate didn't complete successfully`, inspect the cause with `docker compose logs migrate`. A `password authentication failed for user "djs"` error can occur when the existing PostgreSQL volume was initialized with a different password: changing `.env` does not change the password stored in that database. To keep the existing data and synchronize the database role with the current `.env`, run:
+
+```bash
+printf '%s\n' "ALTER ROLE djs PASSWORD :'password';" | \
+  docker compose exec -T postgres sh -c 'psql -v ON_ERROR_STOP=1 -v password="$POSTGRES_PASSWORD" -U "$POSTGRES_USER" -d "$POSTGRES_DB"'
+docker compose up --build --scale worker=3
+```
+
+This command uses the default `djs` role. If you changed `POSTGRES_USER`, replace `djs` in the SQL command with that role name.
+
 ```bash
 curl -i -X POST http://127.0.0.1:8000/jobs \
   -H 'Content-Type: application/json' \
