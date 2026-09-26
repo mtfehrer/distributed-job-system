@@ -1,19 +1,54 @@
 services:
+  migrate:
+    build: .
+    command: alembic upgrade head
+    environment: &app_env
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-djs}:${POSTGRES_PASSWORD:-djs}@postgres:5432/${POSTGRES_DB:-djs}
+      REDIS_URL: redis://redis:6379/0
+    depends_on:
+      postgres:
+        condition: service_healthy
+
   api:
     build: .
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000
+    environment: *app_env
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
     ports:
       - "127.0.0.1:8000:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health/live', timeout=2)"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
 
   worker:
     build: .
     command: python -m app.worker
+    environment: *app_env
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    stop_grace_period: 15s
+    restart: unless-stopped
 
   coordinator:
     build: .
     command: python -m app.coordinator
+    environment: *app_env
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
 
-  db:
+  postgres:
     image: postgres:17-alpine
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-djs}
@@ -28,7 +63,7 @@ services:
       retries: 5
     restart: unless-stopped
 
-  queue:
+  redis:
     image: redis:7-alpine
     command: redis-server --appendonly yes
     volumes:

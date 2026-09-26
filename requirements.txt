@@ -1,1 +1,9 @@
-fastapi
+fastapi==0.115.12
+uvicorn==0.34.2
+SQLAlchemy==2.0.54
+psycopg[binary]==3.2.13
+redis==5.2.1
+alembic==1.15.2
+pydantic==2.12.5
+pytest==8.3.5
+httpx==0.28.1
